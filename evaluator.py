@@ -36,21 +36,38 @@ def accepts_list(func):
             return func(self, text, *args, **kwargs)
         return [func(self, t, *args, **kwargs) for t in text]
     return wrapper
-
 class TokenizerEvaluator:
-    """Main class for evaluating tokenizer performance."""
+    """Main class for evaluating tokenizer performance.
+
+    This class provides methods to evaluate various metrics of a given tokenizer,
+    including compression ratio, speed, and average token lengths. It can handle
+    both single strings and lists of strings for evaluation.
+    """
 
     def __init__(self, tokenizer: Any):
+        """Initialize the TokenizerEvaluator with a tokenizer.
+
+        Args:
+            tokenizer (Any): An instance of a tokenizer (e.g., from Hugging Face Transformers).
+        """
         self.tokenizer = tokenizer
 
     def __repr__(self):
+        """Return a string representation of the TokenizerEvaluator instance."""
         return f"TokenizerEvaluator(tokenizer={self.tokenizer.__class__.__name__})"
 
     def __str__(self):
+        """Return a user-friendly string description of the TokenizerEvaluator instance."""
         return f"TokenizerEvaluator for {self.tokenizer.__class__.__name__}"
 
     def print_results(self, results: Dict[str, Union[EvaluationResult, List[EvaluationResult]]], verbose: bool = False):
-        """Print evaluation results."""
+        """Print evaluation results in a readable format.
+
+        Args:
+            results (Dict[str, Union[EvaluationResult, List[EvaluationResult]]]): 
+                A dictionary containing metric names and their corresponding evaluation results.
+            verbose (bool): If True, include additional information in the printed results.
+        """
         for metric_name, result in results.items():
             print(f"\n{metric_name}:")
             if isinstance(result, list):
@@ -60,6 +77,12 @@ class TokenizerEvaluator:
                 self._print_single_result(result, verbose)
 
     def _print_single_result(self, result: EvaluationResult, verbose: bool):
+        """Print a single evaluation result.
+
+        Args:
+            result (EvaluationResult): The evaluation result to print.
+            verbose (bool): If True, include additional information in the printed result.
+        """
         print(f"Value: {result.value:.4f}")
         if verbose:
             if result.description:
@@ -68,13 +91,29 @@ class TokenizerEvaluator:
                 print(f"Additional Info: {result.additional_info}")
 
     def _tokenize_text(self, text: str) -> List[str]:
-        """Helper method to tokenize text and return token strings."""
+        """Helper method to tokenize text and return token strings.
+
+        Args:
+            text (str): The input text to tokenize.
+
+        Returns:
+            List[str]: A list of token strings obtained from the input text.
+        """
         tokens = self.tokenizer.encode(text, add_special_tokens=False, return_tensors=None)
         return self.tokenizer.convert_ids_to_tokens(tokens)
 
     @accepts_list
     def evaluate_metric(self, text: str, metric: str, **kwargs) -> EvaluationResult:
-        """Generic method to evaluate any metric from tokenization_scorer."""
+        """Generic method to evaluate any metric from tokenization_scorer.
+
+        Args:
+            text (str): The input text for evaluation.
+            metric (str): The name of the metric to evaluate.
+            **kwargs: Additional parameters for metric evaluation.
+
+        Returns:
+            EvaluationResult: The result of the metric evaluation.
+        """
         tokens = self._tokenize_text(text)
         formatted_text = [tokens]
         value = tokenization_scorer.score(formatted_text, metric=metric, **kwargs)
@@ -91,7 +130,14 @@ class TokenizerEvaluator:
         )
 
     def _get_metric_description(self, metric: str) -> str:
-        """Return a description of the given metric."""
+        """Return a description of the given metric.
+
+        Args:
+            metric (str): The name of the metric.
+
+        Returns:
+            str: A description of the metric or a default message if not found.
+        """
         descriptions = {
             "shannon_entropy": "Measures the uncertainty or information content of the token sequence.",
             "shannon_efficiency": "Indicates how efficiently the token sequence encodes information relative to its length.",
@@ -104,7 +150,16 @@ class TokenizerEvaluator:
         return descriptions.get(metric, "No description available for this metric.")
 
     def evaluate_all_metrics(self, text: Union[str, List[str]], **kwargs) -> Dict[str, Union[EvaluationResult, List[EvaluationResult]]]:
-        """Evaluate all available metrics for the given text(s)."""
+        """Evaluate all available metrics for the given text(s).
+
+        Args:
+            text (Union[str, List[str]]): The input text or a list of texts for evaluation.
+            **kwargs: Additional parameters for specific metrics.
+
+        Returns:
+            Dict[str, Union[EvaluationResult, List[EvaluationResult]]]: 
+                A dictionary containing metric names and their corresponding evaluation results.
+        """
         metrics = {
             "shannon_entropy": {"metric": "shannon_entropy"},
             "shannon_efficiency": {"metric": "shannon_efficiency"},
@@ -144,7 +199,14 @@ class TokenizerEvaluator:
 
     @accepts_list
     def evaluate_compression(self, text: str) -> EvaluationResult:
-        """Evaluate compression ratio of the tokenizer."""
+        """Evaluate compression ratio of the tokenizer.
+
+        Args:
+            text (str): The input text to evaluate for compression.
+
+        Returns:
+            EvaluationResult: The result of the compression ratio evaluation.
+        """
         tokens = self._tokenize_text(text)
         compression_ratio = len(tokens) / len(text) if len(text) > 0 else 0
         return EvaluationResult(
@@ -160,7 +222,14 @@ class TokenizerEvaluator:
 
     @accepts_list
     def evaluate_speed(self, text: str) -> EvaluationResult:
-        """Evaluate the speed of the tokenizer."""
+        """Evaluate the speed of the tokenizer.
+
+        Args:
+            text (str): The input text to evaluate for speed.
+
+        Returns:
+            EvaluationResult: The result of the speed evaluation.
+        """
         start_time = time.time()
         tokens = self._tokenize_text(text)
         time_taken = time.time() - start_time
@@ -178,7 +247,11 @@ class TokenizerEvaluator:
         )
 
     def evaluate_average_token_length_vocab(self) -> EvaluationResult:
-        """Evaluate the average token length in the vocabulary."""
+        """Evaluate the average token length in the vocabulary.
+
+        Returns:
+            EvaluationResult: The result of the average token length evaluation in the vocabulary.
+        """
         vocab = self.tokenizer.get_vocab()
         avg_token_length = np.mean([len(token) for token in vocab.keys()]) if vocab else 0
         return EvaluationResult(
@@ -192,7 +265,14 @@ class TokenizerEvaluator:
 
     @accepts_list
     def evaluate_average_token_length_text(self, text: str) -> EvaluationResult:
-        """Evaluate the average token length in the given text."""
+        """Evaluate the average token length in the given text.
+
+        Args:
+            text (str): The input text to evaluate for average token length.
+
+        Returns:
+            EvaluationResult: The result of the average token length evaluation.
+        """
         tokens = self._tokenize_text(text)
         avg_token_length = len(text) / len(tokens) if len(tokens) > 0 else 0
         return EvaluationResult(
@@ -207,7 +287,14 @@ class TokenizerEvaluator:
 
     @accepts_list
     def evaluate_word_initial_tokens(self, text: str) -> EvaluationResult:
-        """Evaluate the proportion of word-initial tokens in the token sequence."""
+        """Evaluate the proportion of word-initial tokens in the token sequence.
+
+        Args:
+            text (str): The input text to evaluate for word-initial tokens.
+
+        Returns:
+            EvaluationResult: The result of the word-initial tokens evaluation.
+        """
         tokens = self._tokenize_text(text)
         word_initial_tokens = [token for token in tokens if not token.startswith(('_', '#', '.', 'Ġ'))]
         proportion = len(word_initial_tokens) / len(tokens) if len(tokens) > 0 else 0
@@ -223,7 +310,11 @@ class TokenizerEvaluator:
         )
     
     def evaluate_compression_over_languages(self) -> EvaluationResult:
-        """Evaluate the compression ratio over different languages."""
+        """Evaluate the compression ratio over different languages.
+
+        Returns:
+            EvaluationResult: A dictionary of compression results for different languages.
+        """
         languages = {
             "english": 'datasets/evaluation/english.txt',
             "french": 'datasets/evaluation/french.txt',
@@ -241,16 +332,20 @@ class TokenizerEvaluator:
         return results
     
     def evaluate_compression_over_custom_files(self, paths: List[str]) -> EvaluationResult:
-        """Evaluate the compression ratio over custom files."""
+        """Evaluate the compression ratio over custom files.
+
+        Args:
+            paths (List[str]): A list of file paths to evaluate for compression.
+
+        Returns:
+            EvaluationResult: A dictionary of compression results for the specified custom files.
+        """
         results = {}
         for path in paths:
             with open(path, 'r') as f:
                 text = f.read()
             results[path] = self.evaluate_compression(text)
         return results
-    
-
-    
 
 # Example usage
 def main():
