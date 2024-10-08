@@ -154,6 +154,7 @@ class TokenizerEvaluator:
             additional_info={
                 "num_tokens": len(tokens),
                 "num_chars": len(text),
+                "tokens": tokens,
                 "mean_token_length": len(text) / len(tokens) if len(tokens) > 0 else 0
             }
         )
@@ -240,17 +241,6 @@ class TokenizerEvaluator:
             results[lang] = self.evaluate_compression(text)
         return results
     
-    def evaluate_compression_over_custom_files(self, paths: List[str]) -> EvaluationResult:
-        """Evaluate the compression ratio over custom files."""
-        results = {}
-        for path in paths:
-            with open(path, 'r') as f:
-                text = f.read()
-            results[path] = self.evaluate_compression(text)
-        return results
-    
-
-    
 
 # Example usage
 def main():
@@ -264,11 +254,10 @@ def main():
     evaluator = TokenizerEvaluator(tokenizer)
     
     # Evaluate all metrics
-    results = evaluator.evaluate_all_metrics(sample_texts)
-    # results = evaluator.evaluate_compression_over_languages()
-    # results = evaluator.evaluate_compression_over_custom_files(['datasets/evaluation/english.txt', 'datasets/evaluation/french.txt'])
+    results = evaluator.evaluate_all_metrics(sample_texts[0])
+    verbose = True
     # Print results
-    evaluator.print_results(results, verbose = True)
+    evaluator.print_results(results, verbose=verbose)
 
 if __name__ == "__main__":
     main()

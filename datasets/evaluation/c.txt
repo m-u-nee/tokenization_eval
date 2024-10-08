@@ -1,0 +1,162 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <string.h>
+
+#define MAX_INPUT 100
+
+void print_menu() {
+    printf("\nScientific Calculator Menu:\n");
+    printf("1. Addition\n");
+    printf("2. Subtraction\n");
+    printf("3. Multiplication\n");
+    printf("4. Division\n");
+    printf("5. Power\n");
+    printf("6. Square Root\n");
+    printf("7. Logarithm (base 10)\n");
+    printf("8. Sine\n");
+    printf("9. Cosine\n");
+    printf("10. Tangent\n");
+    printf("11. Exit\n");
+    printf("Choose an operation (1-11): ");
+}
+
+double add(double a, double b) {
+    return a + b;
+}
+
+double subtract(double a, double b) {
+    return a - b;
+}
+
+double multiply(double a, double b) {
+    return a * b;
+}
+
+double divide(double a, double b) {
+    if (b == 0) {
+        printf("Error: Division by zero!\n");
+        return NAN;
+    }
+    return a / b;
+}
+
+double power(double base, double exp) {
+    return pow(base, exp);
+}
+
+double square_root(double a) {
+    if (a < 0) {
+        printf("Error: Square root of negative number!\n");
+        return NAN;
+    }
+    return sqrt(a);
+}
+
+double logarithm(double a) {
+    if (a <= 0) {
+        printf("Error: Logarithm of non-positive number!\n");
+        return NAN;
+    }
+    return log10(a);
+}
+
+double sine(double a) {
+    return sin(a * (M_PI / 180)); // Convert degrees to radians
+}
+
+double cosine(double a) {
+    return cos(a * (M_PI / 180)); // Convert degrees to radians
+}
+
+double tangent(double a) {
+    return tan(a * (M_PI / 180)); // Convert degrees to radians
+}
+
+int main() {
+    int choice;
+    double num1, num2, result;
+
+    while (1) {
+        print_menu();
+        scanf("%d", &choice);
+
+        if (choice == 11) {
+            printf("Exiting the calculator. Goodbye!\n");
+            break;
+        }
+
+        switch (choice) {
+            case 1:
+                printf("Enter two numbers: ");
+                scanf("%lf %lf", &num1, &num2);
+                result = add(num1, num2);
+                printf("Result: %.2lf\n", result);
+                break;
+            case 2:
+                printf("Enter two numbers: ");
+                scanf("%lf %lf", &num1, &num2);
+                result = subtract(num1, num2);
+                printf("Result: %.2lf\n", result);
+                break;
+            case 3:
+                printf("Enter two numbers: ");
+                scanf("%lf %lf", &num1, &num2);
+                result = multiply(num1, num2);
+                printf("Result: %.2lf\n", result);
+                break;
+            case 4:
+                printf("Enter two numbers: ");
+                scanf("%lf %lf", &num1, &num2);
+                result = divide(num1, num2);
+                if (!isnan(result)) {
+                    printf("Result: %.2lf\n", result);
+                }
+                break;
+            case 5:
+                printf("Enter base and exponent: ");
+                scanf("%lf %lf", &num1, &num2);
+                result = power(num1, num2);
+                printf("Result: %.2lf\n", result);
+                break;
+            case 6:
+                printf("Enter a number: ");
+                scanf("%lf", &num1);
+                result = square_root(num1);
+                if (!isnan(result)) {
+                    printf("Result: %.2lf\n", result);
+                }
+                break;
+            case 7:
+                printf("Enter a number: ");
+                scanf("%lf", &num1);
+                result = logarithm(num1);
+                if (!isnan(result)) {
+                    printf("Result: %.2lf\n", result);
+                }
+                break;
+            case 8:
+                printf("Enter an angle in degrees: ");
+                scanf("%lf", &num1);
+                result = sine(num1);
+                printf("Result: %.2lf\n", result);
+                break;
+            case 9:
+                printf("Enter an angle in degrees: ");
+                scanf("%lf", &num1);
+                result = cosine(num1);
+                printf("Result: %.2lf\n", result);
+                break;
+            case 10:
+                printf("Enter an angle in degrees: ");
+                scanf("%lf", &num1);
+                result = tangent(num1);
+                printf("Result: %.2lf\n", result);
+                break;
+            default:
+                printf("Invalid choice! Please select a valid option.\n");
+        }
+    }
+
+    return 0;
+}
