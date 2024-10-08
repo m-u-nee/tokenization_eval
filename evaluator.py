@@ -10,6 +10,12 @@ import os
 import sys
 from contextlib import contextmanager
 import time
+from dataclasses import dataclass
+from typing import Optional, Dict, Any, List, Union
+import numpy as np
+import time
+import functools
+
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -36,16 +42,24 @@ class EvaluationResult:
     description: Optional[str] = None
     additional_info: Optional[Dict[str, Any]] = None
 
+def accepts_list(func):
+    """Decorator to allow methods to accept either a string or a list of strings."""
+    @functools.wraps(func)
+    def wrapper(self, text, *args, **kwargs):
+        if isinstance(text, str):
+            return func(self, text, *args, **kwargs)
+        return [func(self, t, *args, **kwargs) for t in text]
+    return wrapper
 
 class TokenizerEvaluator:
     """Main class for evaluating tokenizer performance."""
-    
+
     def __init__(self, tokenizer: Any):
         self.tokenizer = tokenizer
-    
+
     def __repr__(self):
         return f"TokenizerEvaluator(tokenizer={self.tokenizer.__class__.__name__})"
-    
+
     def __str__(self):
         return f"TokenizerEvaluator for {self.tokenizer.__class__.__name__}"
 
@@ -53,36 +67,33 @@ class TokenizerEvaluator:
         """Print evaluation results."""
         for metric_name, result in results.items():
             print(f"\n{metric_name}:")
-            if verbose:
+            if isinstance(result, list):
+                for res in result:
+                    self._print_single_result(res, verbose)
+            else:
+                self._print_single_result(result, verbose)
+
+    def _print_single_result(self, result: EvaluationResult, verbose: bool):
+        print(f"Value: {result.value:.4f}")
+        if verbose:
+            if result.description:
                 print(f"Description: {result.description}")
-            print(f"Value: {result.value:.4f}")
-            if verbose and result.additional_info:
+            if result.additional_info:
                 print(f"Additional Info: {result.additional_info}")
-                if "parameters" in result.additional_info and result.additional_info["parameters"]:
-                    print(f"Parameters: {result.additional_info['parameters']}")
-        
 
     def _tokenize_text(self, text: str) -> List[str]:
         """Helper method to tokenize text and return token strings."""
         tokens = self.tokenizer.encode(text, add_special_tokens=False, return_tensors=None)
         return self.tokenizer.convert_ids_to_tokens(tokens)
 
-    def evaluate_metric(self, text: Union[str, List[str]], metric: str, **kwargs) -> Union[EvaluationResult, List[EvaluationResult]]:
+    @accepts_list
+    def evaluate_metric(self, text: str, metric: str, **kwargs) -> EvaluationResult:
         """Generic method to evaluate any metric from tokenization_scorer."""
-        if isinstance(text, str):
-            return self._evaluate_single_metric(text, metric, **kwargs)
-        return [self._evaluate_single_metric(t, metric, **kwargs) for t in text]
-
-    def _evaluate_single_metric(self, text: str, metric: str, **kwargs) -> EvaluationResult:
-        """Evaluate a single metric for a single text."""
         tokens = self._tokenize_text(text)
         formatted_text = [tokens]
-        
         with suppress_stdout():
             value = tokenization_scorer.score(formatted_text, metric=metric, **kwargs)
-        
         description = self._get_metric_description(metric)
-        
         return EvaluationResult(
             metric_name=metric,
             value=value,
@@ -122,40 +133,35 @@ class TokenizerEvaluator:
             },
             "bits": {"metric": "bits"}
         }
-        
+
         results = {metric_name: self.evaluate_metric(text, **params) for metric_name, params in metrics.items()}
-        results.update({
-            "compression_ratio": self.evaluate_compression(text),
-            "speed": self.evaluate_speed(text),
-            "average_token_length_vocab": self.evaluate_average_token_length_vocab(),
-            "average_token_length_text": self.evaluate_average_token_length_text(text),
-            "word_initial_tokens": self.evaluate_word_initial_tokens(text)
-        })
-        
+
+        # Methods that require text as input
+        text_metrics = {
+            "compression_ratio": self.evaluate_compression,
+            "speed": self.evaluate_speed,
+            "average_token_length_text": self.evaluate_average_token_length_text,
+            "word_initial_tokens": self.evaluate_word_initial_tokens
+        }
+
+        for metric_name, method in text_metrics.items():
+            results[metric_name] = method(text)
+
+        # Methods that do not require text as input
+        non_text_metrics = {
+            "average_token_length_vocab": self.evaluate_average_token_length_vocab
+        }
+
+        for metric_name, method in non_text_metrics.items():
+            results[metric_name] = method()
+
         return results
 
-    def evaluate_compression(self, text: Union[str, List[str]]) -> EvaluationResult:
+    @accepts_list
+    def evaluate_compression(self, text: str) -> EvaluationResult:
         """Evaluate compression ratio of the tokenizer."""
-        return self._evaluate_generic(text, self._evaluate_single_compression)
-
-    def evaluate_speed(self, text: Union[str, List[str]]) -> EvaluationResult:
-        """Evaluate the speed of the tokenizer."""
-        return self._evaluate_generic(text, self._evaluate_single_speed)
-
-    def evaluate_average_token_length_text(self, text: Union[str, List[str]]) -> EvaluationResult:
-        """Evaluate the average token length in the text."""
-        return self._evaluate_generic(text, self._evaluate_single_average_token_length_text)
-
-    def _evaluate_generic(self, text: Union[str, List[str]], method) -> Union[EvaluationResult, List[EvaluationResult]]:
-        """Generic evaluation method to handle both single and list inputs."""
-        if isinstance(text, str):
-            return method(text)
-        return [method(t) for t in text]
-    
-    def _evaluate_single_compression(self, text: str) -> EvaluationResult:
         tokens = self._tokenize_text(text)
-        compression_ratio = len(tokens) / len(text)
-        
+        compression_ratio = len(tokens) / len(text) if len(text) > 0 else 0
         return EvaluationResult(
             metric_name="compression_ratio",
             value=compression_ratio,
@@ -164,17 +170,17 @@ class TokenizerEvaluator:
                 "num_tokens": len(tokens),
                 "num_chars": len(text),
                 "tokens": tokens,
-                "mean_token_length": len(text) / len(tokens)
+                "mean_token_length": len(text) / len(tokens) if len(tokens) > 0 else 0
             }
         )
-    
-    def _evaluate_single_speed(self, text: str) -> EvaluationResult:
-        tokens = self._tokenize_text(text)
+
+    @accepts_list
+    def evaluate_speed(self, text: str) -> EvaluationResult:
+        """Evaluate the speed of the tokenizer."""
         start_time = time.time()
-        _ = self._tokenize_text(text)
+        tokens = self._tokenize_text(text)
         time_taken = time.time() - start_time
-        tokens_per_second = len(tokens) / time_taken
-        
+        tokens_per_second = len(tokens) / time_taken if time_taken > 0 else 0
         return EvaluationResult(
             metric_name="speed",
             value=tokens_per_second,
@@ -190,8 +196,7 @@ class TokenizerEvaluator:
     def evaluate_average_token_length_vocab(self) -> EvaluationResult:
         """Evaluate the average token length in the vocabulary."""
         vocab = self.tokenizer.get_vocab()
-        avg_token_length = np.mean([len(token) for token in vocab.keys()])
-        
+        avg_token_length = np.mean([len(token) for token in vocab.keys()]) if vocab else 0
         return EvaluationResult(
             metric_name="average_token_length_vocab",
             value=avg_token_length,
@@ -201,10 +206,11 @@ class TokenizerEvaluator:
             }
         )
 
-    def _evaluate_single_average_token_length_text(self, text: str) -> EvaluationResult:
+    @accepts_list
+    def evaluate_average_token_length_text(self, text: str) -> EvaluationResult:
+        """Evaluate the average token length in the given text."""
         tokens = self._tokenize_text(text)
-        avg_token_length = len(text) / len(tokens)
-        
+        avg_token_length = len(text) / len(tokens) if len(tokens) > 0 else 0
         return EvaluationResult(
             metric_name="average_token_length_text",
             value=avg_token_length,
@@ -214,16 +220,13 @@ class TokenizerEvaluator:
                 "num_chars": len(text)
             }
         )
-    
-    # Now we implement number/proportion of word-initial tokens (number of tokens without ##/_/Gwith dot as the first character)
-    def evaluate_word_initial_tokens(self, text: Union[str, List[str]]) -> EvaluationResult:
-        return self._evaluate_generic(text, self._evaluate_single_word_initial_tokens)
-    
-    def _evaluate_single_word_initial_tokens(self, text: str) -> EvaluationResult:
+
+    @accepts_list
+    def evaluate_word_initial_tokens(self, text: str) -> EvaluationResult:
+        """Evaluate the proportion of word-initial tokens in the token sequence."""
         tokens = self._tokenize_text(text)
-        word_initial_tokens = [token for token in tokens if not token[0] in ['_', '#', '.', 'Ġ']]
-        proportion = len(word_initial_tokens) / len(tokens)
-        
+        word_initial_tokens = [token for token in tokens if not token.startswith(('_', '#', '.', 'Ġ'))]
+        proportion = len(word_initial_tokens) / len(tokens) if len(tokens) > 0 else 0
         return EvaluationResult(
             metric_name="word_initial_tokens",
             value=proportion,
@@ -241,6 +244,7 @@ def main():
     sample_texts = [
         "This is a sample text to evaluate tokenizer metrics.",
         "Here's another example with different characters and lengths!",
+        " This is one with many strange characters: !@#$%^&*()_+{}|:\"<>?`-=[]\;',./~",
     ]
     tokenizer_path = '/Users/Mattia/Desktop/tokenizer'
     tokenizer = transformers.PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
